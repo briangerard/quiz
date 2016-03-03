@@ -87,8 +87,7 @@ func TestSwap(t *testing.T) {
 			actual.Swap(i, j)
 
 			if !reflect.DeepEqual(actual, expected) {
-				t.Errorf("Swap - Exchanging %d<->%d; expected:\n",
-					"\t%q\nBut got\n\t%q", i, j, expected, actual)
+				t.Errorf("Swap - Exchanging %d<->%d; expected:\n\t%q\nBut got\n\t%q", i, j, expected, actual)
 			}
 		}
 	}
@@ -103,13 +102,13 @@ var shortWords = words{word("a"), word("ab"), word("abcd")}
 // to generate by hand".
 var shortGraph = bytegraph{endOfWord: false,
 	next: map[byte]bytegraph{
-		byte('a'): bytegraph{endOfWord: true,
+		byte('a'): {endOfWord: true,
 			next: map[byte]bytegraph{
-				byte('b'): bytegraph{endOfWord: true,
+				byte('b'): {endOfWord: true,
 					next: map[byte]bytegraph{
-						byte('c'): bytegraph{endOfWord: false,
+						byte('c'): {endOfWord: false,
 							next: map[byte]bytegraph{
-								byte('d'): bytegraph{endOfWord: true,
+								byte('d'): {endOfWord: true,
 									next: map[byte]bytegraph{},
 								}}}}}}}}}
 
@@ -121,7 +120,7 @@ func TestMakegraph(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(testgraph, shortGraph) {
-		t.Errorf("makegraph - Expected:\n\t%q\nBut got\n\t%q", shortGraph, testgraph)
+		t.Errorf("makegraph - Expected:\n\t%v\nBut got\n\t%v", shortGraph, testgraph)
 	}
 }
 
@@ -188,24 +187,24 @@ func TestIsCompound(t *testing.T) {
 // would just enforce some arbitrary string representation.
 func TestString(t *testing.T) {
 	var testPotentials = []potential{
-		potential{whole: word("quartsplat"),
+		{whole: word("quartsplat"),
 			prefixes:   words{word("qu"), word("quart")},
 			components: words{word("quart"), word("splat")}},
-		potential{whole: word("quartfulsquish"),
+		{whole: word("quartfulsquish"),
 			prefixes:   words{word("qu"), word("quart")},
 			components: words{word("qu"), word("artful"), word("squish")}},
-		potential{whole: word("quartfulsquishy"),
+		{whole: word("quartfulsquishy"),
 			prefixes:   words{word("qu"), word("quart")},
 			components: nil},
-		potential{whole: word("nosuchword"),
+		{whole: word("nosuchword"),
 			prefixes:   nil,
 			components: nil},
 	}
 
 	for _, p := range testPotentials {
 		if !strings.Contains(p.String(), string(p.whole)) {
-			t.Errorf("String - Representation of \"%s\" does not contain the word itself: %q\n",
-				string(p.whole), p.String())
+			t.Errorf("String - Representation of %q does not contain the word itself: %q\n",
+				p.whole, p.String())
 		}
 	}
 }
@@ -255,7 +254,7 @@ func TestLoadWordsFrom(t *testing.T) {
 	source := fakeFile{}
 	source.ws = make(words, len(testWords))
 	copy(source.ws, testWords)
-	testMinLen := int(^uint(0) >> 1)
+	testMinLen := maxInt
 	for _, w := range testWords {
 		if len(w) < testMinLen {
 			testMinLen = len(w)

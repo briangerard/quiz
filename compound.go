@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	MaxInt = int(^uint(0) >> 1)
+	maxInt = int(^uint(0) >> 1)
 )
 
 // I got tired of typing brackets pretty early on.
@@ -247,7 +247,7 @@ func (p potential) String() string {
 // of words.  It returns the length of the shortest word it sees.
 func loadWordsFrom(r io.Reader, wordlist *words) (minLen int) {
 	wordloader := bufio.NewScanner(r)
-	minLen = MaxInt
+	minLen = maxInt
 
 	for wordloader.Scan() {
 		nw := make(word, len(wordloader.Bytes()))
@@ -280,7 +280,7 @@ func main() {
 	// go looking for a two character word, for instance.
 	// Setting it initially to the maximum possible so anything
 	// returned by loadWordsFrom() will be less.
-	minWordLength := MaxInt
+	minWordLength := maxInt
 
 	for _, arg := range os.Args[1:] {
 		var file *os.File
@@ -329,8 +329,8 @@ func main() {
 		hasPrefixes := makegraph(thisword, &chargraph)
 		if hasPrefixes {
 			np := potential{}
-			np.whole = make(word, len(allwords[i]))
-			copy(np.whole, allwords[i])
+			np.whole = make(word, len(thisword))
+			copy(np.whole, thisword)
 
 			// This determines which other words from the list begin the current
 			// word.  If the current word is "foodie", and "foo" and "food" are
@@ -358,7 +358,7 @@ func main() {
 		}
 	}
 
-	descendingLengths := make([]int, 0)
+	var descendingLengths []int
 	for l := range candidatesByLength {
 		descendingLengths = append(descendingLengths, l)
 	}
