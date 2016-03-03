@@ -1,4 +1,5 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/briangerard/quiz)](https://goreportcard.com/report/github.com/briangerard/quiz)
+[![Build Status](https://travis-ci.org/briangerard/quiz.svg?branch=master)](https://travis-ci.org/briangerard/quiz)
 
 # Solution to the NodePrime Quiz
 
