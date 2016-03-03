@@ -1,3 +1,5 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/briangerard/quiz)](https://goreportcard.com/report/github.com/briangerard/quiz)
+
 # Solution to the NodePrime Quiz
 
 First, I'd just like to say thanks for a really fun programming puzzle!  This was really
