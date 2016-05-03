@@ -261,26 +261,10 @@ func loadWordsFrom(r io.Reader, wordlist *words) (minLen int) {
 	return
 }
 
-//////////////
-//
-// And now, without any further ado...
-//
-func main() {
-
-	// We do need *something* to work with.
-	if len(os.Args) == 1 || (len(os.Args) == 2 && os.Args[1] == "-h") {
-		exitUsage()
-	}
-
-	// First, load up whatever words are to be processed.
-	allwords := make(words, 0)
-
-	// Recording this makes the subword search a bit more efficient.
-	// If the smallest word is three characters, there's no need to
-	// go looking for a two character word, for instance.
-	// Setting it initially to the maximum possible so anything
-	// returned by loadWordsFrom() will be less.
-	minWordLength := maxInt
+func loadAllTheWords(wordlist *words) (minLen int) {
+	// Setting this initially to the maximum possible so
+	// anything returned by loadWordsFrom() will be less.
+	minLen = maxInt
 
 	for _, arg := range os.Args[1:] {
 		var file *os.File
@@ -295,9 +279,9 @@ func main() {
 			}
 		}
 
-		minLength := loadWordsFrom(file, &allwords)
-		if minLength < minWordLength {
-			minWordLength = minLength
+		minLength := loadWordsFrom(file, wordlist)
+		if minLength < minLen {
+			minLen = minLength
 		}
 
 		if file != os.Stdin {
@@ -308,25 +292,21 @@ func main() {
 		}
 	}
 
-	// The words must be sorted in order for the algorithm to work.
-	sort.Sort(allwords)
+	return
+}
 
-	// Now set up the main bytegraph, which allows for a very rapid
-	// determination of composite words.
-	chargraph := bytegraph{}
-	chargraph.next = make(map[byte]bytegraph)
+func graphAndFindCandidates(wordlist words) (g bytegraph, pm map[int]potentials) {
+	g = bytegraph{}
+	g.next = make(map[byte]bytegraph)
 
-	// Since the purpose is finding the longest compound word, it
-	// makes sense to be able to look at candidate words in descending
-	// order of length.  We can stop at the first one found.
-	candidatesByLength := make(map[int]potentials)
+	pm = make(map[int]potentials)
 
-	for i, thisword := range allwords {
+	for i, thisword := range wordlist {
 
 		// The only words we're really interested in examining further
 		// are those that begin with another word from the list.  No
 		// others can possibly be compound words.
-		hasPrefixes := makegraph(thisword, &chargraph)
+		hasPrefixes := makegraph(thisword, &g)
 		if hasPrefixes {
 			np := potential{}
 			np.whole = make(word, len(thisword))
@@ -338,9 +318,9 @@ func main() {
 			np.prefixes = make(words, 0)
 		PREFIX:
 			for j := 1; j <= i; j++ {
-				if bytes.HasPrefix(allwords[i], allwords[i-j]) {
-					np.prefixes = append(np.prefixes, make(word, len(allwords[i-j])))
-					copy(np.prefixes[len(np.prefixes)-1], allwords[i-j])
+				if bytes.HasPrefix(wordlist[i], wordlist[i-j]) {
+					np.prefixes = append(np.prefixes, make(word, len(wordlist[i-j])))
+					copy(np.prefixes[len(np.prefixes)-1], wordlist[i-j])
 				} else {
 					// Since the word list is sorted, as soon as a word is reached
 					// that is NOT a prefix of the current word, no further words
@@ -350,13 +330,52 @@ func main() {
 				}
 			}
 
-			_, exists := candidatesByLength[len(np.whole)]
+			_, exists := pm[len(np.whole)]
 			if !exists {
-				candidatesByLength[len(np.whole)] = make(potentials, 0)
+				pm[len(np.whole)] = make(potentials, 0)
 			}
-			candidatesByLength[len(np.whole)] = append(candidatesByLength[len(np.whole)], np)
+			pm[len(np.whole)] = append(pm[len(np.whole)], np)
 		}
 	}
+
+	return
+}
+
+//////////////
+//
+// And now, without any further ado...
+//
+func main() {
+
+	// We do need *something* to work with.
+	if len(os.Args) == 1 || (len(os.Args) == 2 && os.Args[1] == "-h") {
+		fmt.Fprint(os.Stderr, usage())
+		os.Exit(0)
+	}
+
+	// First, load up whatever words are to be processed.
+	allwords := make(words, 0)
+
+	// Recording the minimum word length makes the subword search a
+	// bit more efficient.  If the smallest word is three characters,
+	// there's no need to go looking for a two character word, for
+	// instance.
+	minWordLength := loadAllTheWords(&allwords)
+
+	// The words must be sorted in order for the algorithm to work.
+	sort.Sort(allwords)
+
+	// chargraph is the main bytegraph, which allows for a very rapid
+	// determination of composite words.
+	//
+	// candidatesByLength is pretty much what it sounds like.  Potential
+	// compound words, indexed by word length.
+	//
+	// Since the purpose is finding the *longest* compound word, it
+	// makes sense to be able to look at candidate words in descending
+	// order of length.  We can stop at the first one found since it
+	// will by definition be the longest.
+	chargraph, candidatesByLength := graphAndFindCandidates(allwords)
 
 	var descendingLengths []int
 	for l := range candidatesByLength {
@@ -377,10 +396,10 @@ POSSIBLE:
 
 // exitUsage - what it says on the tin.  Just print the basic usage, and
 // exit gracefully.
-func exitUsage() {
+func usage() (u string) {
 	programName := filepath.Base(os.Args[0])
 
-	usage := "Usage: " + programName + " < -h | - | filename [filename ...] >\n" +
+	u = "Usage: " + programName + " < -h | - | filename [filename ...] >\n" +
 		"\tWhere:\n" +
 		"\t\t      -h : Prints this message.\n" +
 		"\t\t       - : Indicates that words should be read from STDIN.\n" +
@@ -394,7 +413,5 @@ func exitUsage() {
 		"Whether in a stream or in file(s), words are expected to be given one per line.\n" +
 		"\n"
 
-	fmt.Fprint(os.Stderr, usage)
-
-	os.Exit(0)
+	return
 }
