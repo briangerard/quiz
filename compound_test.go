@@ -118,11 +118,11 @@ var shortGraph = bytegraph{endOfWord: false,
 				}}}}}
 
 var shortCandidatesByLength = map[int]potentials{
-	2: potentials{
+	2: {
 		{whole: word("ab"), prefixes: words{word("a")}},
 		{whole: word("za"), prefixes: words{word("z")}},
 	},
-	4: potentials{{whole: word("abcd"), prefixes: words{word("ab"), word("a")}}},
+	4: {{whole: word("abcd"), prefixes: words{word("ab"), word("a")}}},
 }
 
 func TestMakegraph(t *testing.T) {
