@@ -87,8 +87,7 @@ func TestSwap(t *testing.T) {
 			actual.Swap(i, j)
 
 			if !reflect.DeepEqual(actual, expected) {
-				t.Errorf("Swap - Exchanging %d<->%d; expected:\n",
-					"\t%q\nBut got\n\t%q", i, j, expected, actual)
+				t.Errorf("Swap - Exchanging %d<->%d; expected:\n\t%q\nBut got\n\t%q", i, j, expected, actual)
 			}
 		}
 	}
@@ -96,22 +95,35 @@ func TestSwap(t *testing.T) {
 
 // A much more manageable word list to test makegraph().
 // NOTE: This list MUST be sorted for the test to be valid.
-var shortWords = words{word("a"), word("ab"), word("abcd")}
+var shortWords = words{word("a"), word("ab"), word("abcd"), word("z"), word("za")}
 
 // ...and the resulting also-much-more-manageable bytegraph
 // that comes from it.  ...and by "manageable" I mean "easier
 // to generate by hand".
 var shortGraph = bytegraph{endOfWord: false,
 	next: map[byte]bytegraph{
-		byte('a'): bytegraph{endOfWord: true,
+		byte('a'): {endOfWord: true,
 			next: map[byte]bytegraph{
-				byte('b'): bytegraph{endOfWord: true,
+				byte('b'): {endOfWord: true,
 					next: map[byte]bytegraph{
-						byte('c'): bytegraph{endOfWord: false,
+						byte('c'): {endOfWord: false,
 							next: map[byte]bytegraph{
-								byte('d'): bytegraph{endOfWord: true,
+								byte('d'): {endOfWord: true,
 									next: map[byte]bytegraph{},
-								}}}}}}}}}
+								}}}}}}},
+		byte('z'): {endOfWord: true,
+			next: map[byte]bytegraph{
+				byte('a'): {endOfWord: true,
+					next: map[byte]bytegraph{},
+				}}}}}
+
+var shortCandidatesByLength = map[int]potentials{
+	2: {
+		{whole: word("ab"), prefixes: words{word("a")}},
+		{whole: word("za"), prefixes: words{word("z")}},
+	},
+	4: {{whole: word("abcd"), prefixes: words{word("ab"), word("a")}}},
+}
 
 func TestMakegraph(t *testing.T) {
 	testgraph := bytegraph{}
@@ -121,7 +133,7 @@ func TestMakegraph(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(testgraph, shortGraph) {
-		t.Errorf("makegraph - Expected:\n\t%q\nBut got\n\t%q", shortGraph, testgraph)
+		t.Errorf("makegraph - Expected:\n\t%v\nBut got\n\t%v", shortGraph, testgraph)
 	}
 }
 
@@ -146,6 +158,7 @@ func TestSubWords(t *testing.T) {
 		{word("foobar"), words{word("foobar")}},
 		{word("fooquux"), words{word("foo"), word("quux")}},
 		{word("fooartartfulbar"), words{word("foo"), word("art"), word("artful"), word("bar")}},
+		{word("fooquuxsquish"), words{word("foo"), word("quux"), word("squish")}},
 		{word("fooart"), words{word("foo"), word("art")}},
 		{word("splatterart"), words{word("splatter"), word("art")}},
 		{word("quartful"), words{word("qu"), word("artful")}},
@@ -189,24 +202,24 @@ func TestIsCompound(t *testing.T) {
 // would just enforce some arbitrary string representation.
 func TestString(t *testing.T) {
 	var testPotentials = []potential{
-		potential{whole: word("quartsplat"),
+		{whole: word("quartsplat"),
 			prefixes:   words{word("qu"), word("quart")},
 			components: words{word("quart"), word("splat")}},
-		potential{whole: word("quartfulsquish"),
+		{whole: word("quartfulsquish"),
 			prefixes:   words{word("qu"), word("quart")},
 			components: words{word("qu"), word("artful"), word("squish")}},
-		potential{whole: word("quartfulsquishy"),
+		{whole: word("quartfulsquishy"),
 			prefixes:   words{word("qu"), word("quart")},
 			components: nil},
-		potential{whole: word("nosuchword"),
+		{whole: word("nosuchword"),
 			prefixes:   nil,
 			components: nil},
 	}
 
 	for _, p := range testPotentials {
 		if !strings.Contains(p.String(), string(p.whole)) {
-			t.Errorf("String - Representation of \"%s\" does not contain the word itself: %q\n",
-				string(p.whole), p.String())
+			t.Errorf("String - Representation of %q does not contain the word itself: %q\n",
+				p.whole, p.String())
 		}
 	}
 }
@@ -242,12 +255,27 @@ func TestLoadWordsFrom(t *testing.T) {
 	}
 }
 
-// Yeah, not all that robust a test, but beyond this, there's not
-// much more that can be reasonably asserted.
-func TestUsage(t *testing.T) {
-	usageMsg := usage()
+func TestGraphAndFindCandidates(t *testing.T) {
+	actualGraph, actualCandidatesByLength := graphAndFindCandidates(shortWords)
 
-	if !strings.Contains(usageMsg, "Usage") {
-		t.Errorf("usage - Message does not contain \"Usage\"\n")
+	if !reflect.DeepEqual(shortGraph, actualGraph) {
+		t.Errorf("graphAndFindCandidates - bytegraph mismatch.\n"+
+			"Expected:\n\t%v\nActual\n\t%v\n", shortGraph, actualGraph)
+	}
+
+	if !reflect.DeepEqual(shortCandidatesByLength, actualCandidatesByLength) {
+		t.Errorf("graphAndFindCandidates - candidate map mismatch.\n"+
+			"Expected:\n\t%#v\nActual\n\t%#v\n", shortCandidatesByLength, actualCandidatesByLength)
+	}
+
+}
+
+// Ok, not the most robust of tests, but there's really not a lot that can
+// be done on this one.
+func TestUsage(t *testing.T) {
+	usageMessage := usage()
+
+	if !strings.Contains(usageMessage, "Usage") {
+		t.Errorf("usage - Does not contain \"Usage\"\n")
 	}
 }

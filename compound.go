@@ -56,7 +56,7 @@ import (
 )
 
 const (
-	MaxInt = int(^uint(0) >> 1)
+	maxInt = int(^uint(0) >> 1)
 )
 
 // I got tired of typing brackets pretty early on.
@@ -247,7 +247,7 @@ func (p potential) String() string {
 // of words.  It returns the length of the shortest word it sees.
 func loadWordsFrom(r io.Reader, wordlist *words) (minLen int) {
 	wordloader := bufio.NewScanner(r)
-	minLen = MaxInt
+	minLen = maxInt
 
 	for wordloader.Scan() {
 		nw := make(word, len(wordloader.Bytes()))
@@ -255,6 +255,86 @@ func loadWordsFrom(r io.Reader, wordlist *words) (minLen int) {
 		*wordlist = append(*wordlist, nw)
 		if len(nw) < minLen {
 			minLen = len(nw)
+		}
+	}
+
+	return
+}
+
+func loadAllTheWords(wordlist *words) (minLen int) {
+	// Setting this initially to the maximum possible so
+	// anything returned by loadWordsFrom() will be less.
+	minLen = maxInt
+
+	for _, arg := range os.Args[1:] {
+		var file *os.File
+		var err error
+
+		if arg == "-" {
+			file = os.Stdin
+		} else {
+			file, err = os.Open(arg)
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		minLength := loadWordsFrom(file, wordlist)
+		if minLength < minLen {
+			minLen = minLength
+		}
+
+		if file != os.Stdin {
+			err = file.Close()
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+
+	return
+}
+
+func graphAndFindCandidates(wordlist words) (g bytegraph, pm map[int]potentials) {
+	g = bytegraph{}
+	g.next = make(map[byte]bytegraph)
+
+	pm = make(map[int]potentials)
+
+	for i, thisword := range wordlist {
+
+		// The only words we're really interested in examining further
+		// are those that begin with another word from the list.  No
+		// others can possibly be compound words.
+		hasPrefixes := makegraph(thisword, &g)
+		if hasPrefixes {
+			np := potential{}
+			np.whole = make(word, len(thisword))
+			copy(np.whole, thisword)
+
+			// This determines which other words from the list begin the current
+			// word.  If the current word is "foodie", and "foo" and "food" are
+			// on the list, they will be added to "foodie"'s prefix list.
+			np.prefixes = make(words, 0)
+		PREFIX:
+			for j := 1; j <= i; j++ {
+				if bytes.HasPrefix(wordlist[i], wordlist[i-j]) {
+					np.prefixes = append(np.prefixes, make(word, len(wordlist[i-j])))
+					copy(np.prefixes[len(np.prefixes)-1], wordlist[i-j])
+				} else {
+					// Since the word list is sorted, as soon as a word is reached
+					// that is NOT a prefix of the current word, no further words
+					// need to be looked at.  All prefixes for a given word MUST
+					// immediately precede that word in the list.
+					break PREFIX
+				}
+			}
+
+			_, exists := pm[len(np.whole)]
+			if !exists {
+				pm[len(np.whole)] = make(potentials, 0)
+			}
+			pm[len(np.whole)] = append(pm[len(np.whole)], np)
 		}
 	}
 
@@ -276,90 +356,28 @@ func main() {
 	// First, load up whatever words are to be processed.
 	allwords := make(words, 0)
 
-	// Recording this makes the subword search a bit more efficient.
-	// If the smallest word is three characters, there's no need to
-	// go looking for a two character word, for instance.
-	// Setting it initially to the maximum possible so anything
-	// returned by loadWordsFrom() will be less.
-	minWordLength := MaxInt
-
-	for _, arg := range os.Args[1:] {
-		var file *os.File
-		var err error
-
-		if arg == "-" {
-			file = os.Stdin
-		} else {
-			file, err = os.Open(arg)
-			if err != nil {
-				panic(err)
-			}
-		}
-
-		minLength := loadWordsFrom(file, &allwords)
-		if minLength < minWordLength {
-			minWordLength = minLength
-		}
-
-		if file != os.Stdin {
-			err = file.Close()
-			if err != nil {
-				panic(err)
-			}
-		}
-	}
+	// Recording the minimum word length makes the subword search a
+	// bit more efficient.  If the smallest word is three characters,
+	// there's no need to go looking for a two character word, for
+	// instance.
+	minWordLength := loadAllTheWords(&allwords)
 
 	// The words must be sorted in order for the algorithm to work.
 	sort.Sort(allwords)
 
-	// Now set up the main bytegraph, which allows for a very rapid
+	// chargraph is the main bytegraph, which allows for a very rapid
 	// determination of composite words.
-	chargraph := bytegraph{}
-	chargraph.next = make(map[byte]bytegraph)
-
-	// Since the purpose is finding the longest compound word, it
+	//
+	// candidatesByLength is pretty much what it sounds like.  Potential
+	// compound words, indexed by word length.
+	//
+	// Since the purpose is finding the *longest* compound word, it
 	// makes sense to be able to look at candidate words in descending
-	// order of length.  We can stop at the first one found.
-	candidatesByLength := make(map[int]potentials)
+	// order of length.  We can stop at the first one found since it
+	// will by definition be the longest.
+	chargraph, candidatesByLength := graphAndFindCandidates(allwords)
 
-	for i, thisword := range allwords {
-
-		// The only words we're really interested in examining further
-		// are those that begin with another word from the list.  No
-		// others can possibly be compound words.
-		hasPrefixes := makegraph(thisword, &chargraph)
-		if hasPrefixes {
-			np := potential{}
-			np.whole = make(word, len(allwords[i]))
-			copy(np.whole, allwords[i])
-
-			// This determines which other words from the list begin the current
-			// word.  If the current word is "foodie", and "foo" and "food" are
-			// on the list, they will be added to "foodie"'s prefix list.
-			np.prefixes = make(words, 0)
-		PREFIX:
-			for j := 1; j <= i; j++ {
-				if bytes.HasPrefix(allwords[i], allwords[i-j]) {
-					np.prefixes = append(np.prefixes, make(word, len(allwords[i-j])))
-					copy(np.prefixes[len(np.prefixes)-1], allwords[i-j])
-				} else {
-					// Since the word list is sorted, as soon as a word is reached
-					// that is NOT a prefix of the current word, no further words
-					// need to be looked at.  All prefixes for a given word MUST
-					// immediately precede that word in the list.
-					break PREFIX
-				}
-			}
-
-			_, exists := candidatesByLength[len(np.whole)]
-			if !exists {
-				candidatesByLength[len(np.whole)] = make(potentials, 0)
-			}
-			candidatesByLength[len(np.whole)] = append(candidatesByLength[len(np.whole)], np)
-		}
-	}
-
-	descendingLengths := make([]int, 0)
+	var descendingLengths []int
 	for l := range candidatesByLength {
 		descendingLengths = append(descendingLengths, l)
 	}
@@ -378,10 +396,10 @@ POSSIBLE:
 
 // exitUsage - what it says on the tin.  Just print the basic usage, and
 // exit gracefully.
-func usage() string {
+func usage() (u string) {
 	programName := filepath.Base(os.Args[0])
 
-	usage := "Usage: " + programName + " < -h | - | filename [filename ...] >\n" +
+	u = "Usage: " + programName + " < -h | - | filename [filename ...] >\n" +
 		"\tWhere:\n" +
 		"\t\t      -h : Prints this message.\n" +
 		"\t\t       - : Indicates that words should be read from STDIN.\n" +
@@ -395,5 +413,5 @@ func usage() string {
 		"Whether in a stream or in file(s), words are expected to be given one per line.\n" +
 		"\n"
 
-	return usage
+	return
 }
