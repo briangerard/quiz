@@ -1,7 +1,7 @@
 package main
 
 import (
-	"io"
+	"bytes"
 	"reflect"
 	"sort"
 	"strings"
@@ -145,6 +145,7 @@ func TestSubWords(t *testing.T) {
 	}{
 		{word("foobar"), words{word("foobar")}},
 		{word("fooquux"), words{word("foo"), word("quux")}},
+		{word("fooartartfulbar"), words{word("foo"), word("art"), word("artful"), word("bar")}},
 		{word("fooart"), words{word("foo"), word("art")}},
 		{word("splatterart"), words{word("splatter"), word("art")}},
 		{word("quartful"), words{word("qu"), word("artful")}},
@@ -210,51 +211,16 @@ func TestString(t *testing.T) {
 	}
 }
 
-// Concocting a fake file that can be used to test the loading
-// function without having to rely on a file on disk for the
-// test.
-type fakeFile struct {
-	ws     words
-	cursor int
-}
-
-// The Read method that makes our fakeFile an io.Reader, so that
-// loadWordsFrom can use it as a source of data.
-func (f *fakeFile) Read(p []byte) (bytesRead int, err error) {
-WORD:
-	for {
-		if f.cursor < len(f.ws) {
-			thisLen := len(f.ws[f.cursor])
-
-			// Strictly less than, since we need room for a newline.
-			if thisLen < len(p)-bytesRead {
-				copy(p[bytesRead:bytesRead+thisLen], f.ws[f.cursor])
-				bytesRead += thisLen
-
-				// A bufio.Scanner breaks on newlines by default; adding
-				// them to the test words here, since our test word slice
-				// doesn't include them (and doesn't need to).
-				p[bytesRead] = byte('\n')
-				bytesRead++
-
-				f.cursor++
-				continue WORD
-			}
-		} else {
-			err = io.EOF
-		}
-		if bytesRead == 0 {
-			f.cursor = 0
-		}
-		break WORD
-	}
-	return
-}
-
 func TestLoadWordsFrom(t *testing.T) {
-	source := fakeFile{}
-	source.ws = make(words, len(testWords))
-	copy(source.ws, testWords)
+	// Making a fake file out of the testWords.  No need to rely on an
+	// actual file on disk when bytes.NewReader will give me what I need.
+	var fakeFile []byte
+	for _, w := range testWords {
+		fakeFile = append(fakeFile, w...)
+		fakeFile = append(fakeFile, '\n')
+	}
+	source := bytes.NewReader(fakeFile)
+
 	testMinLen := int(^uint(0) >> 1)
 	for _, w := range testWords {
 		if len(w) < testMinLen {
@@ -263,7 +229,7 @@ func TestLoadWordsFrom(t *testing.T) {
 	}
 
 	actualWords := make(words, 0)
-	actualMinLen := loadWordsFrom(&source, &actualWords)
+	actualMinLen := loadWordsFrom(source, &actualWords)
 
 	if actualMinLen != testMinLen {
 		t.Errorf("loadWordsFrom - MinLen mismatch: expected: %d, got: %d\n",
@@ -273,5 +239,15 @@ func TestLoadWordsFrom(t *testing.T) {
 	if !reflect.DeepEqual(testWords, actualWords) {
 		t.Errorf("loadWordsFrom - Word list mismatch.\n"+
 			"Expected:\n\t%q\nActual:\n\t%q\n", testWords, actualWords)
+	}
+}
+
+// Yeah, not all that robust a test, but beyond this, there's not
+// much more that can be reasonably asserted.
+func TestUsage(t *testing.T) {
+	usageMsg := usage()
+
+	if !strings.Contains(usageMsg, "Usage") {
+		t.Errorf("usage - Message does not contain \"Usage\"\n")
 	}
 }

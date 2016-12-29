@@ -269,7 +269,8 @@ func main() {
 
 	// We do need *something* to work with.
 	if len(os.Args) == 1 || (len(os.Args) == 2 && os.Args[1] == "-h") {
-		exitUsage()
+		fmt.Fprintf(os.Stderr, usage())
+		os.Exit(0)
 	}
 
 	// First, load up whatever words are to be processed.
@@ -377,7 +378,7 @@ POSSIBLE:
 
 // exitUsage - what it says on the tin.  Just print the basic usage, and
 // exit gracefully.
-func exitUsage() {
+func usage() string {
 	programName := filepath.Base(os.Args[0])
 
 	usage := "Usage: " + programName + " < -h | - | filename [filename ...] >\n" +
@@ -394,7 +395,5 @@ func exitUsage() {
 		"Whether in a stream or in file(s), words are expected to be given one per line.\n" +
 		"\n"
 
-	fmt.Fprint(os.Stderr, usage)
-
-	os.Exit(0)
+	return usage
 }
